@@ -257,6 +257,64 @@ where
     }
 }
 
+
+impl<S, T, const N: usize> GraphQLType<S> for [T; N]
+where
+    S: ScalarValue,
+    T: GraphQLType<S>,
+{
+    fn name(_: &Self::TypeInfo) -> Option<&'static str> {
+        None
+    }
+
+    fn meta<'r>(info: &Self::TypeInfo, registry: &mut Registry<'r, S>) -> MetaType<'r, S>
+    where
+        S: 'r,
+    {
+        registry.build_list_type::<T>(info).into_meta()
+    }
+}
+
+impl<S, T, const N: usize> GraphQLValue<S> for [T; N]
+where
+    S: ScalarValue,
+    T: GraphQLValue<S>,
+{
+    type Context = T::Context;
+    type TypeInfo = T::TypeInfo;
+
+    fn type_name(&self, _: &Self::TypeInfo) -> Option<&'static str> {
+        None
+    }
+
+    fn resolve(
+        &self,
+        info: &Self::TypeInfo,
+        _: Option<&[Selection<S>]>,
+        executor: &Executor<Self::Context, S>,
+    ) -> ExecutionResult<S> {
+        resolve_into_list(executor, info, self.iter())
+    }
+}
+
+impl<S, T, const N: usize> GraphQLValueAsync<S> for [T; N]
+where
+    T: GraphQLValueAsync<S>,
+    T::TypeInfo: Sync,
+    T::Context: Sync,
+    S: ScalarValue + Send + Sync,
+{
+    fn resolve_async<'a>(
+        &'a self,
+        info: &'a Self::TypeInfo,
+        _: Option<&'a [Selection<S>]>,
+        executor: &'a Executor<Self::Context, S>,
+    ) -> crate::BoxFuture<'a, ExecutionResult<S>> {
+        let f = resolve_into_list_async(executor, info, self.iter());
+        Box::pin(f)
+    }
+}
+
 fn resolve_into_list<'t, S, T, I>(
     executor: &Executor<T::Context, S>,
     info: &T::TypeInfo,

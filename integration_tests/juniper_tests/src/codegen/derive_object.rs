@@ -76,6 +76,14 @@ struct WithCustomContext {
     a: bool,
 }
 
+#[derive(GraphQLObject, Debug, PartialEq)]
+pub struct WithConstGenerics {
+    // Embedded objects should work.
+    o: [Obj; 2],
+    // Embedded scalars should work.
+    s: [i32; 4],
+}
+
 struct Query;
 
 #[graphql_object]
@@ -126,6 +134,21 @@ impl Query {
             one_field: true,
             another_field: 146,
         }
+    }
+
+    fn const_generics_obj() -> WithConstGenerics {
+        let a = Obj {
+            regular_field: false,
+            c: 123,
+        };
+        let b = Obj {
+            regular_field: true,
+            c: 456,
+        };
+
+        let s = [42, 69, 420, 1024];
+
+        WithConstGenerics { o: [a, b], s }
     }
 }
 
@@ -421,6 +444,74 @@ async fn test_no_rename_obj() {
             ),
             vec![]
         ))
+    );
+}
+
+#[tokio::test]
+async fn test_const_generics_obj() {
+    let doc = r#"
+        {
+            constGenericsObj {
+                o {
+                    renamedField,
+                },
+                s,
+            }
+        }"#;
+
+    let schema = RootNode::new(
+        Query,
+        EmptyMutation::<()>::new(),
+        EmptySubscription::<()>::new(),
+    );
+
+    //assert_eq!(0,1);
+
+    let x = execute(doc, None, &schema, &Variables::new(), &()).await;
+    println!("{:?}", x);
+
+    assert_eq!(
+        x.unwrap(),
+        (
+            Value::object(
+                vec![(
+                    "constGenericsObj",
+                    Value::object(
+                        vec![
+                            (
+                                "o",
+                                Value::list(vec![
+                                    Value::object(
+                                        vec![("renamedField", Value::scalar(123))]
+                                            .into_iter()
+                                            .collect()
+                                    ),
+                                    Value::object(
+                                        vec![("renamedField", Value::scalar(456))]
+                                            .into_iter()
+                                            .collect()
+                                    ),
+                                ]),
+                            ),
+                            (
+                                "s",
+                                Value::list(vec![
+                                    Value::scalar(42),
+                                    Value::scalar(69),
+                                    Value::scalar(420),
+                                    Value::scalar(1024),
+                                ]),
+                            )
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                )]
+                .into_iter()
+                .collect()
+            ),
+            vec![]
+        )
     );
 }
 
