@@ -95,7 +95,6 @@ impl ImplBlock {
                     }
                     // Check for context arg.
                     else if context_type
-                        .clone()
                         .map(|ctx| util::type_is_ref_of(&captured.ty, ctx))
                         .unwrap_or(false)
                     {
@@ -104,7 +103,6 @@ impl ImplBlock {
                     // Make sure the user does not specify the Context
                     //  without a reference. (&Context)
                     else if context_type
-                        .clone()
                         .map(|ctx| ctx.inner() == &*captured.ty)
                         .unwrap_or(false)
                     {

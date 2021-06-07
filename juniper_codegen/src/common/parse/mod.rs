@@ -4,11 +4,7 @@
 pub(crate) mod attr;
 pub(crate) mod downcaster;
 
-use std::{
-    any::TypeId,
-    iter::{self, FromIterator as _},
-    mem,
-};
+use std::{any::TypeId, iter, mem};
 
 use proc_macro2::Span;
 use syn::{
@@ -88,7 +84,7 @@ impl<'a> ParseBufferExt for ParseBuffer<'a> {
             }
             Punctuated::parse_terminated(&inner)?
         } else {
-            Punctuated::from_iter(iter::once(self.parse::<T>()?))
+            iter::once(self.parse::<T>()?).collect::<Punctuated<_, _>>()
         })
     }
 }
