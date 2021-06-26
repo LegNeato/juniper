@@ -1,8 +1,17 @@
 use fnv::FnvHashMap;
 use juniper::{
-    marker, DefaultScalarValue, FromInputValue, GraphQLInputObject, GraphQLType, GraphQLValue,
-    InputValue, Registry, ToInputValue,
+    execute, marker, DefaultScalarValue, EmptyMutation, EmptySubscription, FromInputValue,
+    GraphQLInputObject, GraphQLType, GraphQLValue, InputValue, Registry, RootNode, ToInputValue,
+    Value, Variables,
 };
+
+struct Root;
+#[juniper::graphql_object]
+impl Root {
+    fn x(_input: [i32; 3]) -> bool {
+        true
+    }
+}
 
 #[derive(GraphQLInputObject, Debug, PartialEq)]
 #[graphql(
@@ -23,6 +32,11 @@ struct Input {
 #[graphql(rename = "none")]
 struct NoRenameInput {
     regular_field: String,
+}
+
+#[derive(GraphQLInputObject, Debug, PartialEq)]
+struct ArrayInput {
+    data: [i32; 3],
 }
 
 /// Object comment.
@@ -105,20 +119,20 @@ struct WithLifetime<'a> {
 }
 
 #[test]
-fn test_derived_input_object() {
+fn validate_meta_info() {
     assert_eq!(
         <Input as GraphQLType<DefaultScalarValue>>::name(&()),
         Some("MyInput")
     );
 
-    // Validate meta info.
     let mut registry: Registry = Registry::new(FnvHashMap::default());
     let meta = Input::meta(&(), &mut registry);
     assert_eq!(meta.name(), Some("MyInput"));
     assert_eq!(meta.description(), Some(&"input descr".to_string()));
+}
 
-    // Test default value injection.
-
+#[test]
+fn test_default_value_injection() {
     let input_no_defaults: InputValue = ::serde_json::from_value(serde_json::json!({
         "regularField": "a",
     }))
@@ -133,9 +147,10 @@ fn test_derived_input_object() {
             other: None,
         }
     );
+}
 
-    // Test with all values supplied.
-
+#[test]
+fn test_with_all_values_supplied() {
     let input: InputValue = ::serde_json::from_value(serde_json::json!({
         "regularField": "a",
         "haha": 55,
@@ -152,9 +167,10 @@ fn test_derived_input_object() {
             other: Some(true),
         }
     );
+}
 
-    // Test disable renaming
-
+#[test]
+fn test_renaming_disabled() {
     let input: InputValue = ::serde_json::from_value(serde_json::json!({
         "regular_field": "hello",
     }))
@@ -167,6 +183,75 @@ fn test_derived_input_object() {
             regular_field: "hello".into(),
         }
     );
+}
+
+#[test]
+fn test_array() {
+    let input: InputValue = ::serde_json::from_value(serde_json::json!({
+        "data": [1, 2, 3],
+    }))
+    .unwrap();
+
+    let output: ArrayInput = FromInputValue::from_input_value(&input).unwrap();
+    assert_eq!(output, ArrayInput { data: [1, 2, 3] });
+}
+
+#[tokio::test]
+async fn test_array_query() {
+    let doc = r#"
+        {
+            x(input: [1, 2, 3])
+        }"#;
+
+    let schema = RootNode::new(
+        Root,
+        EmptyMutation::<()>::new(),
+        EmptySubscription::<()>::new(),
+    );
+
+    assert_eq!(
+        execute(doc, None, &schema, &Variables::new(), &()).await,
+        Ok((
+            Value::object(vec![("x", Value::scalar(true))].into_iter().collect()),
+            vec![]
+        ))
+    );
+}
+
+#[tokio::test]
+async fn test_array_type_mismatch() {
+    let doc = r#"
+        {
+            x(input: ["foo", "bar", "baz"])
+        }"#;
+
+    let schema = RootNode::new(
+        Root,
+        EmptyMutation::<()>::new(),
+        EmptySubscription::<()>::new(),
+    );
+
+    assert!(execute(doc, None, &schema, &Variables::new(), &())
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn test_array_length_mismatch() {
+    let doc = r#"
+        {
+            x(input: [1, 2])
+        }"#;
+
+    let schema = RootNode::new(
+        Root,
+        EmptyMutation::<()>::new(),
+        EmptySubscription::<()>::new(),
+    );
+
+    assert!(execute(doc, None, &schema, &Variables::new(), &())
+        .await
+        .is_err());
 }
 
 #[test]

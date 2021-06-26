@@ -247,7 +247,56 @@ where
     }
 }
 
-impl<'a, T, S> ToInputValue<S> for &'a [T]
+use std::convert::TryInto;
+
+impl<T, S, const N: usize> FromInputValue<S> for [T; N]
+where
+    T: FromInputValue<S>,
+    S: ScalarValue,
+{
+    fn from_input_value(v: &InputValue<S>) -> Option<[T; N]>
+where {
+        match *v {
+            // Given a list, make sure all elements can convert and it is the correct length.
+            InputValue::List(ref ls) => {
+                let v: Vec<_> = ls.iter().filter_map(|i| i.item.convert()).collect();
+
+                if v.len() == ls.len() {
+                    let r: Result<[T; N], _> = v.try_into();
+                    match r {
+                        Ok(r) => Some(r),
+                        Err(_) => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            // Given a non-List, attempt to coerce it to a List with one element.
+            ref other => {
+                let v: Option<Vec<_>> =  other.convert().map(|e| vec![e]);
+                match v {
+                    Some(x) => {
+                        let r: Result<[T; N], _> = x.try_into();
+                        match r {
+                            Ok(r) => Some(r),
+                            Err(_) => None,
+                        }
+                    },
+                    None => None,
+                }
+            }
+        }
+    }
+
+    fn from_implicit_null() -> Self {
+       // InputValue::Null
+        unimplemented!()
+        //let x: [T; N] = [];
+        //x
+    }
+}
+
+impl<T, S, const N: usize> ToInputValue<S> for [T; N]
 where
     T: ToInputValue<S>,
     S: ScalarValue,
